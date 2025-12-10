@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>記憶力大考驗</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      margin: 0;
+      background: #f4f6fb;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    .game-wrapper {
+      width: 100%;
+      max-width: 960px;
+      background: #ffffff;
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+      padding: 16px 16px 24px;
+    }
+
+    .top-bar {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+      border-bottom: 1px solid #e3e6f0;
+      padding-bottom: 8px;
+    }
+
+    .game-title {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: #333;
+    }
+
+    .game-info {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+      font-size: 1rem;
+      align-items: center;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      background: #eef2ff;
+      color: #3730a3;
+    }
+
+    #timer {
+      font-weight: 700;
+      color: #b91c1c;
+    }
+
+    main {
+      margin-top: 8px;
+    }
+
+    .board {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 12px;
+      padding: 8px;
+      justify-items: center;
+    }
+
+    .card {
+      width: 120px;
+      height: 150px;
+      border-radius: 16px;
+      background: #e5e7eb;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+      cursor: pointer;
+      position: relative;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      user-select: none;
+    }
+
+    .card.disabled {
+      pointer-events: none;
+      cursor: default;
+    }
+
+    .card-inner {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+
+    .card-front,
+    .card-back {
+      position: absolute;
+      inset: 0;
+      border-radius: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 8px;
+      text-align: center;
+      transition: opacity 0.2s ease;
+    }
+
+    .card-front {
+      background: linear-gradient(135deg, #6366f1, #4f46e5);
+      color: #fff;
+      font-size: 1.8rem;
+      font-weight: 600;
+    }
+
+    .card-back {
+      background: #f9fafb;
+      border: 2px solid #e5e7eb;
+      color: #111827;
+      opacity: 0;
+    }
+
+    .card.flipped .card-front {
+      opacity: 0;
+    }
+
+    .card.flipped .card-back {
+      opacity: 1;
+    }
+
+    .card.matched {
+      background: #dcfce7;
+      box-shadow: 0 0 0 2px #16a34a inset;
+      cursor: default;
+    }
+
+    .card.matched .card-front {
+      opacity: 0;
+    }
+
+    .card.matched .card-back {
+      opacity: 1;
+    }
+
+    .emoji {
+      font-size: 2.4rem;
+      margin-bottom: 4px;
+    }
+
+    .label {
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15,23,42,0.55);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 999;
+    }
+
+    .overlay.hidden {
+      display: none;
+    }
+
+    .overlay-card {
+      background: #ffffff;
+      padding: 24px 20px;
+      border-radius: 16px;
+      max-width: 400px;
+      width: 90%;
+      text-align: center;
+      box-shadow: 0 12px 35px rgba(0,0,0,0.2);
+    }
+
+    .overlay-card h2 {
+      margin-top: 0;
+      margin-bottom: 8px;
+      font-size: 1.5rem;
+    }
+
+    .overlay-card p {
+      margin: 0 0 16px;
+      font-size: 1rem;
+      color: #4b5563;
+    }
+
+    .overlay-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    button {
+      padding: 10px 18px;
+      font-size: 1rem;
+      border-radius: 999px;
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+      min-width: 120px;
+    }
+
+    .btn-primary {
+      background: #4f46e5;
+      color: #ffffff;
+    }
+
+    .btn-primary:hover {
+      background: #4338ca;
+    }
+
+    .btn-secondary {
+      background: #e5e7eb;
+      color: #374151;
+    }
+
+    .btn-secondary:hover {
+      background: #d1d5db;
+    }
+
+    @media (max-width: 600px) {
+      .card {
+        width: 100px;
+        height: 130px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="game-wrapper">
+    <header class="top-bar">
+      <div class="game-title">記憶力大考驗</div>
+      <div class="game-info">
+        <span id="levelLabel" class="badge">關卡 1 / 5：水果</span>
+        <span id="timer">剩餘時間：30 秒</span>
+      </div>
+    </header>
+    <main>
+      <div id="board" class="board"></div>
+    </main>
+  </div>
+
+  <!-- 起始畫面 -->
+  <div id="startOverlay" class="overlay">
+    <div class="overlay-card">
+      <h2>記憶力大考驗</h2>
+      <p>
+        一共有 5 關，每關限時 30 秒。<br />
+        點擊卡片配對相同的圖案或角色。
+      </p>
+      <button id="btnStartGame" class="btn-primary">開始第一關（水果）</button>
+    </div>
+  </div>
+
+  <!-- 結果 / 提示畫面 -->
+  <div id="resultOverlay" class="overlay hidden">
+    <div class="overlay-card">
+      <h2 id="resultTitle">時間到</h2>
+      <p id="resultText">哈哈哈傻眼</p>
+      <div class="overlay-buttons">
+        <button id="btnRetry" class="btn-secondary">重玩本關</button>
+        <button id="btnNext" class="btn-primary">下一關</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ---- 關卡資料設定 ----
+    const levels = [
+      {
+        name: "水果",
+        key: "fruit",
+        items: [
+          { id: "apple", emoji: "🍎", label: "蘋果" },
+          { id: "banana", emoji: "🍌", label: "香蕉" },
+          { id: "grape", emoji: "🍇", label: "葡萄" },
+          { id: "orange", emoji: "🍊", label: "橘子" },
+          { id: "watermelon", emoji: "🍉", label: "西瓜" },
+          { id: "pineapple", emoji: "🍍", label: "鳳梨" },
+          { id: "strawberry", emoji: "🍓", label: "草莓" },
+          { id: "kiwi", emoji: "🥝", label: "奇異果" }
+        ]
+      },
+      {
+        name: "食物",
+        key: "food",
+        items: [
+          { id: "bread", emoji: "🍞", label: "麵包" },
+          { id: "egg", emoji: "🥚", label: "雞蛋" },
+          { id: "noodle", emoji: "🍜", label: "麵" },
+          { id: "burger", emoji: "🍔", label: "漢堡" },
+          { id: "pizza", emoji: "🍕", label: "披薩" },
+          { id: "sushi", emoji: "🍣", label: "壽司" },
+          { id: "salad", emoji: "🥗", label: "沙拉" },
+          { id: "cake", emoji: "🍰", label: "蛋糕" }
+        ]
+      },
+      {
+        name: "家具",
+        key: "furniture",
+        items: [
+          { id: "bed", emoji: "🛏️", label: "床" },
+          { id: "chair", emoji: "🪑", label: "椅子" },
+          { id: "sofa", emoji: "🛋️", label: "沙發" },
+          { id: "door", emoji: "🚪", label: "門" },
+          { id: "window", emoji: "🪟", label: "窗戶" },
+          { id: "mirror", emoji: "🪞", label: "鏡子" },
+          { id: "frame", emoji: "🖼️", label: "掛畫" },
+          { id: "lamp", emoji: "💡", label: "燈" }
+        ]
+      },
+      {
+        name: "動物",
+        key: "animal",
+        items: [
+          { id: "dog", emoji: "🐶", label: "狗" },
+          { id: "cat", emoji: "🐱", label: "貓" },
+          { id: "pig", emoji: "🐷", label: "豬" },
+          { id: "mouse", emoji: "🐭", label: "老鼠" },
+          { id: "chicken", emoji: "🐔", label: "雞" },
+          { id: "horse", emoji: "🐴", label: "馬" },
+          { id: "fish", emoji: "🐟", label: "魚" },
+          { id: "rabbit", emoji: "🐰", label: "兔子" }
+        ]
+      },
+      {
+        name: "神奇寶貝",
+        key: "pokemon",
+        items: [
+          { id: "pikachu", emoji: "⭐", label: "皮卡丘" },
+          { id: "bulbasaur", emoji: "🍃", label: "妙蛙種子" },
+          { id: "charmander", emoji: "🔥", label: "小火龍" },
+          { id: "squirtle", emoji: "💧", label: "傑尼龜" },
+          { id: "psyduck", emoji: "💭", label: "可達鴨" },
+          { id: "eevee", emoji: "✨", label: "伊布" },
+          { id: "snorlax", emoji: "🛌", label: "卡比獸" },
+          { id: "jigglypuff", emoji: "🎤", label: "胖丁" }
+        ]
+      }
+    ];
+
+    const TOTAL_TIME = 30; // 每關 30 秒
+
+    const boardEl = document.getElementById("board");
+    const levelLabelEl = document.getElementById("levelLabel");
+    const timerEl = document.getElementById("timer");
+    const startOverlay = document.getElementById("startOverlay");
+    const btnStartGame = document.getElementById("btnStartGame");
+    const resultOverlay = document.getElementById("resultOverlay");
+    const resultTitleEl = document.getElementById("resultTitle");
+    const resultTextEl = document.getElementById("resultText");
+    const btnRetry = document.getElementById("btnRetry");
+    const btnNext = document.getElementById("btnNext");
+
+    let currentLevelIndex = 0;
+    let flippedCards = [];
+    let lockBoard = false;
+    let timerId = null;
+    let timeLeft = TOTAL_TIME;
+    let matchedPairs = 0;
+    let totalPairs = 0;
+    let gameOver = false;
+
+    function shuffle(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+      return array;
+    }
+
+    function chooseRandomItems(items, pairCount) {
+      const cloned = [...items];
+      shuffle(cloned);
+      return cloned.slice(0, pairCount);
+    }
+
+    function updateHeader() {
+      const level = levels[currentLevelIndex];
+      levelLabelEl.textContent = `關卡 ${currentLevelIndex + 1} / ${levels.length}：${level.name}`;
+    }
+
+    function updateTimerDisplay() {
+      timerEl.textContent = `剩餘時間：${timeLeft} 秒`;
+    }
+
+    function startTimer() {
+      clearInterval(timerId);
+      timeLeft = TOTAL_TIME;
+      gameOver = false;
+      updateTimerDisplay();
+
+      timerId = setInterval(() => {
+        timeLeft--;
+        if (timeLeft < 0) timeLeft = 0;
+        updateTimerDisplay();
+
+        if (timeLeft <= 0) {
+          clearInterval(timerId);
+          if (!gameOver) {
+            handleTimeUp();
+          }
+        }
+      }, 1000);
+    }
+
+    function handleTimeUp() {
+      gameOver = true;
+      lockBoard = true;
+      resultTitleEl.textContent = "時間到";
+      resultTextEl.textContent = "哈哈哈傻眼";
+      btnRetry.style.display = "inline-block";
+      btnNext.style.display = "inline-block";
+      btnNext.textContent = "重新挑戰下一次？（仍在本關）";
+      resultOverlay.classList.remove("hidden");
+    }
+
+    function clearBoard() {
+      boardEl.innerHTML = "";
+      flippedCards = [];
+      matchedPairs = 0;
+      totalPairs = 0;
+      lockBoard = false;
+    }
+
+    function buildBoardForLevel(levelIndex) {
+      clearBoard();
+      const level = levels[levelIndex];
+
+      // 一關先用 4 組牌（8 張），負擔比較小
+      const PAIRS_PER_LEVEL = 4;
+      const selectedItems = chooseRandomItems(level.items, PAIRS_PER_LEVEL);
+      totalPairs = selectedItems.length;
+
+      const cardsData = [];
+      selectedItems.forEach(item => {
+        cardsData.push({ ...item });
+        cardsData.push({ ...item });
+      });
+
+      shuffle(cardsData);
+
+      cardsData.forEach((item) => {
+        const card = document.createElement("div");
+        card.className = "card";
+        card.dataset.id = item.id;
+
+        const inner = document.createElement("div");
+        inner.className = "card-inner";
+
+        const front = document.createElement("div");
+        front.className = "card-front";
+        front.textContent = "？";
+
+        const back = document.createElement("div");
+        back.className = "card-back";
+
+        const emojiSpan = document.createElement("div");
+        emojiSpan.className = "emoji";
+        emojiSpan.textContent = item.emoji;
+
+        const labelSpan = document.createElement("div");
+        labelSpan.className = "label";
+        labelSpan.textContent = item.label;
+
+        back.appendChild(emojiSpan);
+        back.appendChild(labelSpan);
+
+        inner.appendChild(front);
+        inner.appendChild(back);
+        card.appendChild(inner);
+        boardEl.appendChild(card);
+      });
+    }
+
+    function startLevel(levelIndex) {
+      currentLevelIndex = levelIndex;
+      updateHeader();
+      buildBoardForLevel(currentLevelIndex);
+      startTimer();
+    }
+
+    function onCardClick(event) {
+      if (lockBoard) return;
+      const card = event.target.closest(".card");
+      if (!card || card.classList.contains("flipped") || card.classList.contains("matched")) return;
+
+      flipCard(card);
+
+      flippedCards.push(card);
+
+      if (flippedCards.length === 2) {
+        lockBoard = true;
+        checkMatch();
+      }
+    }
+
+    function flipCard(card) {
+      card.classList.add("flipped");
+    }
+
+    function unflipCard(card) {
+      card.classList.remove("flipped");
+    }
+
+    function checkMatch() {
+      if (flippedCards.length !== 2) return;
+
+      const [cardA, cardB] = flippedCards;
+      const isMatch = cardA.dataset.id === cardB.dataset.id;
+
+      if (isMatch) {
+        cardA.classList.add("matched", "disabled");
+        cardB.classList.add("matched", "disabled");
+        matchedPairs++;
+
+        flippedCards = [];
+        lockBoard = false;
+
+        if (matchedPairs === totalPairs) {
+          handleLevelClear();
+        }
+      } else {
+        setTimeout(() => {
+          unflipCard(cardA);
+          unflipCard(cardB);
+          flippedCards = [];
+          lockBoard = false;
+        }, 800);
+      }
+    }
+
+    function handleLevelClear() {
+      gameOver = true;
+      clearInterval(timerId);
+
+      const level = levels[currentLevelIndex];
+      const isLast = currentLevelIndex === levels.length - 1;
+
+      resultTitleEl.textContent = "恭喜過關 🎉";
+      resultTextEl.textContent = `你已經完成【${level.name}】關卡！`;
+
+      btnRetry.style.display = "inline-block";
+
+      if (isLast) {
+        btnNext.textContent = "全部通關！從第一關再玩一次";
+      } else {
+        btnNext.textContent = "前往下一關";
+      }
+      btnNext.style.display = "inline-block";
+
+      resultOverlay.classList.remove("hidden");
+    }
+
+    // ---- 事件綁定 ----
+
+    boardEl.addEventListener("click", onCardClick);
+
+    btnStartGame.addEventListener("click", () => {
+      startOverlay.classList.add("hidden");
+      startLevel(0);
+    });
+
+    btnRetry.addEventListener("click", () => {
+      resultOverlay.classList.add("hidden");
+      startLevel(currentLevelIndex);
+    });
+
+    btnNext.addEventListener("click", () => {
+      resultOverlay.classList.add("hidden");
+      const isLast = currentLevelIndex === levels.length - 1;
+      if (isLast) {
+        startLevel(0); // 全部通關後，回第一關
+      } else {
+        startLevel(currentLevelIndex + 1);
+      }
+    });
+  </script>
+</body>
+</html>
