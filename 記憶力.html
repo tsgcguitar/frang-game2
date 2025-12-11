@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>記憶力大考驗 - 升級版</title>
+  <style>
+    :root {
+      --primary-color: #4f46e5;
+      --bg-color: #f0f2f5;
+      --card-bg: #fff;
+      --card-back: linear-gradient(135deg, #6366f1, #4f46e5);
+    }
+
+    * {
+      box-sizing: border-box;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg-color);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden; /* 防止整個頁面彈性捲動 */
+    }
+
+    /* 頂部固定資訊欄 */
+    header {
+      background: #fff;
+      padding: 12px 16px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+      z-index: 10;
+      flex-shrink: 0;
+    }
+
+    .header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.2rem;
+      color: #333;
+    }
+
+    .level-badge {
+      background: #e0e7ff;
+      color: var(--primary-color);
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.9rem;
+      font-weight: bold;
+    }
+
+    .status-bar {
+      display: flex;
+      justify-content: space-between;
+      font-size: 1rem;
+      font-weight: 600;
+      color: #555;
+    }
+
+    .timer.urgent {
+      color: #dc2626;
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.5; }
+      100% { opacity: 1; }
+    }
+
+    /* 遊戲主區域 (可捲動) */
+    main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start; /* 內容少時靠上，多時捲動 */
+    }
+
+    .board {
+      display: grid;
+      /* 手機直式優化：自動填滿，最小寬度設為適合手指的大小 */
+      grid-template-columns: repeat(auto-fill, minmax(75px, 1fr));
+      gap: 10px;
+      width: 100%;
+      max-width: 600px;
+      padding-bottom: 40px; /* 底部留白 */
+    }
+
+    /* 卡片樣式 */
+    .card {
+      aspect-ratio: 3 / 4; /* 保持長寬比 */
+      position: relative;
+      perspective: 1000px;
+      cursor: pointer;
+      user-select: none;
+      touch-action: manipulation;
+    }
+
+    .card-inner {
+      width: 100%;
+      height: 100%;
+      position: relative;
+      transition: transform 0.4s;
+      transform-style: preserve-3d;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+
+    .card.flipped .card-inner {
+      transform: rotateY(180deg);
+    }
+
+    .card.matched .card-inner {
+      transform: rotateY(180deg);
+      box-shadow: 0 0 15px #4ade80; /* 配對成功的發光效果 */
+    }
+
+    .card-face {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      backface-visibility: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border-radius: 12px;
+      font-weight: bold;
+    }
+
+    /* 卡片背面 (未翻開) */
+    .card-front {
+      background: var(--card-back);
+      color: #fff;
+      font-size: 2rem;
+    }
+    
+    .card-front::after {
+      content: "?";
+    }
+
+    /* 卡片正面 (翻開後) */
+    .card-back {
+      background: #fff;
+      transform: rotateY(180deg);
+      border: 2px solid #e5e7eb;
+    }
+
+    .emoji {
+      font-size: 2rem;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+
+    .label {
+      font-size: 0.8rem;
+      color: #333;
+      text-align: center;
+      line-height: 1.2;
+    }
+
+    /* 手機畫面適配 */
+    @media (max-width: 400px) {
+      .board {
+        grid-template-columns: repeat(4, 1fr); /* 強制四排，避免太少 */
+        gap: 8px;
+      }
+      .emoji { font-size: 1.5rem; }
+      .label { font-size: 0.7rem; }
+    }
+
+    /* 遮罩層 */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.85);
+      backdrop-filter: blur(4px);
+      z-index: 999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s;
+    }
+
+    .overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .modal {
+      background: #fff;
+      padding: 30px 20px;
+      border-radius: 20px;
+      text-align: center;
+      width: 100%;
+      max-width: 320px;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+      transform: scale(0.9);
+      transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .overlay.active .modal {
+      transform: scale(1);
+    }
+
+    .modal h2 {
+      margin: 0 0 10px;
+      font-size: 1.8rem;
+      color: #111;
+    }
+
+    .modal p {
+      color: #666;
+      margin-bottom: 24px;
+      line-height: 1.5;
+    }
+
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 12px;
+      font-size: 1.1rem;
+      font-weight: bold;
+      cursor: pointer;
+      margin-bottom: 12px;
+      transition: transform 0.1s;
+    }
+
+    .btn:active {
+      transform: scale(0.98);
+    }
+
+    .btn-primary {
+      background: var(--primary-color);
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+    }
+
+    .btn-secondary {
+      background: #e5e7eb;
+      color: #374151;
+    }
+
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="header-row">
+      <h1>記憶力大考驗</h1>
+      <div id="levelBadge" class="level-badge">Lv.1</div>
+    </div>
+    <div class="status-bar">
+      <span id="categoryName">類別：水果</span>
+      <span id="timerText">30s</span>
+    </div>
+  </header>
+
+  <main>
+    <div id="board" class="board"></div>
+  </main>
+
+  <!-- 遊戲開始 / 過關 / 失敗 遮罩 -->
+  <div id="overlay" class="overlay active">
+    <div class="modal">
+      <h2 id="modalTitle">準備好了嗎？</h2>
+      <p id="modalDesc">
+        共有 5 個關卡。<br>
+        每關卡片會變多，時間會加長！<br>
+        手機直拿玩起來更順手。
+      </p>
+      <button id="btnAction" class="btn btn-primary">開始挑戰</button>
+      <button id="btnRetry" class="btn btn-secondary" style="display:none;">再試一次</button>
+    </div>
+  </div>
+
+  <script>
+    /* 
+      優化重點：
+      1. 資料庫擴充：確保高等級有足夠的不重複圖案。
+      2. 動態計算：每關增加 2 對 (4張) 卡片，時間增加 5 秒。
+    */
+    const BASE_PAIRS = 4; // 第1關 4對 (8張)
+    const PAIRS_INC = 2;  // 每關加 2對 (4張)
+    const BASE_TIME = 30; // 第1關 30秒
+    const TIME_INC = 5;   // 每關加 5秒
+
+    const levelsData = [
+      {
+        name: "水果市場",
+        items: [
+          { id: "apple", emoji: "🍎", label: "蘋果" },
+          { id: "banana", emoji: "🍌", label: "香蕉" },
+          { id: "grape", emoji: "🍇", label: "葡萄" },
+          { id: "orange", emoji: "🍊", label: "橘子" },
+          { id: "water", emoji: "🍉", label: "西瓜" },
+          { id: "pine", emoji: "🍍", label: "鳳梨" },
+          { id: "straw", emoji: "🍓", label: "草莓" },
+          { id: "kiwi", emoji: "🥝", label: "奇異果" },
+          { id: "peach", emoji: "🍑", label: "桃子" },
+          { id: "cherry", emoji: "🍒", label: "櫻桃" },
+          { id: "lemon", emoji: "🍋", label: "檸檬" },
+          { id: "pear", emoji: "🍐", label: "洋梨" },
+          { id: "coco", emoji: "🥥", label: "椰子" },
+          { id: "mango", emoji: "🥭", label: "芒果" }
+        ]
+      },
+      {
+        name: "美味食物",
+        items: [
+          { id: "burger", emoji: "🍔", label: "漢堡" },
+          { id: "pizza", emoji: "🍕", label: "披薩" },
+          { id: "sushi", emoji: "🍣", label: "壽司" },
+          { id: "noodle", emoji: "🍜", label: "拉麵" },
+          { id: "cake", emoji: "🍰", label: "蛋糕" },
+          { id: "fries", emoji: "🍟", label: "薯條" },
+          { id: "hotdog", emoji: "🌭", label: "熱狗" },
+          { id: "popcorn", emoji: "🍿", label: "爆米花" },
+          { id: "donut", emoji: "🍩", label: "甜甜圈" },
+          { id: "cookie", emoji: "🍪", label: "餅乾" },
+          { id: "choco", emoji: "🍫", label: "巧克力" },
+          { id: "icecream", emoji: "🍦", label: "冰淇淋" },
+          { id: "beer", emoji: "🍺", label: "啤酒" },
+          { id: "rice", emoji: "🍙", label: "飯糰" }
+        ]
+      },
+      {
+        name: "可愛動物",
+        items: [
+          { id: "dog", emoji: "🐶", label: "小狗" },
+          { id: "cat", emoji: "🐱", label: "小貓" },
+          { id: "mouse", emoji: "🐭", label: "老鼠" },
+          { id: "hamster", emoji: "🐹", label: "倉鼠" },
+          { id: "rabbit", emoji: "🐰", label: "兔子" },
+          { id: "fox", emoji: "🦊", label: "狐狸" },
+          { id: "bear", emoji: "🐻", label: "熊" },
+          { id: "panda", emoji: "🐼", label: "熊貓" },
+          { id: "koala", emoji: "🐨", label: "無尾熊" },
+          { id: "tiger", emoji: "🐯", label: "老虎" },
+          { id: "lion", emoji: "🦁", label: "獅子" },
+          { id: "cow", emoji: "🐮", label: "乳牛" },
+          { id: "pig", emoji: "🐷", label: "小豬" },
+          { id: "frog", emoji: "🐸", label: "青蛙" }
+        ]
+      },
+      {
+        name: "交通工具",
+        items: [
+          { id: "car", emoji: "🚗", label: "汽車" },
+          { id: "taxi", emoji: "🚕", label: "計程車" },
+          { id: "bus", emoji: "🚌", label: "公車" },
+          { id: "police", emoji: "🚓", label: "警車" },
+          { id: "ambulance", emoji: "🚑", label: "救護車" },
+          { id: "fire", emoji: "🚒", label: "消防車" },
+          { id: "bike", emoji: "🚲", label: "腳踏車" },
+          { id: "train", emoji: "🚄", label: "高鐵" },
+          { id: "plane", emoji: "✈️", label: "飛機" },
+          { id: "rocket", emoji: "🚀", label: "火箭" },
+          { id: "boat", emoji: "🚢", label: "輪船" },
+          { id: "ufo", emoji: "🛸", label: "飛碟" },
+          { id: "truck", emoji: "🚚", label: "卡車" },
+          { id: "motor", emoji: "🛵", label: "機車" }
+        ]
+      },
+      {
+        name: "寶可夢大師",
+        items: [
+          { id: "pika", emoji: "⚡", label: "皮卡丘" },
+          { id: "ball", emoji: "🔴", label: "寶貝球" },
+          { id: "fire", emoji: "🔥", label: "小火龍" },
+          { id: "water", emoji: "💧", label: "傑尼龜" },
+          { id: "grass", emoji: "🍃", label: "妙蛙" },
+          { id: "sleep", emoji: "💤", label: "卡比獸" },
+          { id: "psy", emoji: "😵", label: "可達鴨" },
+          { id: "star", emoji: "⭐", label: "海星星" },
+          { id: "ghost", emoji: "👻", label: "耿鬼" },
+          { id: "drag", emoji: "🐲", label: "快龍" },
+          { id: "eevee", emoji: "🦊", label: "伊布" },
+          { id: "mew", emoji: "🐱", label: "夢幻" },
+          { id: "bird", emoji: "🦅", label: "比雕" },
+          { id: "bug", emoji: "🐛", label: "綠毛蟲" }
+        ]
+      }
+    ];
+
+    // 簡單的音效 (Beep)
+    const playFlipSound = () => {
+      // 這裡可以加入真實音效，為求簡潔省略，保留視覺回饋
+    };
+
+    let currentLevelIdx = 0;
+    let timerInterval = null;
+    let timeLeft = 0;
+    let isLocked = false;
+    let flippedCards = [];
+    let matchedCount = 0;
+    let targetPairs = 0;
+
+    // DOM Elements
+    const boardEl = document.getElementById("board");
+    const levelBadgeEl = document.getElementById("levelBadge");
+    const categoryNameEl = document.getElementById("categoryName");
+    const timerTextEl = document.getElementById("timerText");
+    const overlayEl = document.getElementById("overlay");
+    const modalTitle = document.getElementById("modalTitle");
+    const modalDesc = document.getElementById("modalDesc");
+    const btnAction = document.getElementById("btnAction");
+    const btnRetry = document.getElementById("btnRetry");
+
+    function shuffle(array) {
+      let currentIndex = array.length, randomIndex;
+      while (currentIndex != 0) {
+        randomIndex = Math.floor(Math.random() * currentIndex);
+        currentIndex--;
+        [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
+      }
+      return array;
+    }
+
+    function initGame(levelIndex) {
+      // 1. 設定參數
+      currentLevelIdx = levelIndex;
+      const levelData = levelsData[levelIndex];
+      
+      // 計算本關需要的對數：基礎4 + (關卡數 * 2) => 4, 6, 8, 10, 12
+      targetPairs = BASE_PAIRS + (levelIndex * PAIRS_INC);
+      // 計算本關時間：基礎30 + (關卡數 * 5) => 30, 35, 40...
+      timeLeft = BASE_TIME + (levelIndex * TIME_INC);
+
+      matchedCount = 0;
+      flippedCards = [];
+      isLocked = false;
+      
+      // 2. 更新 UI
+      levelBadgeEl.textContent = `Lv.${levelIndex + 1}`;
+      categoryNameEl.textContent = levelData.name;
+      timerTextEl.textContent = `${timeLeft}s`;
+      timerTextEl.classList.remove("urgent");
+      boardEl.innerHTML = "";
+
+      // 3. 準備卡片
+      // 從該類別中隨機挑選 targetPairs 個圖案
+      const pool = shuffle([...levelData.items]).slice(0, targetPairs);
+      // 複製成兩份並打亂
+      const deck = shuffle([...pool, ...pool]);
+
+      // 4. 生成 HTML
+      deck.forEach(item => {
+        const card = document.createElement("div");
+        card.classList.add("card");
+        card.dataset.id = item.id;
+        
+        card.innerHTML = `
+          <div class="card-inner">
+            <div class="card-face card-front"></div>
+            <div class="card-face card-back">
+              <div class="emoji">${item.emoji}</div>
+              <div class="label">${item.label}</div>
+            </div>
+          </div>
+        `;
+
+        card.addEventListener("click", () => flipCard(card));
+        boardEl.appendChild(card);
+      });
+
+      // 5. 開始計時
+      startTimer();
+    }
+
+    function startTimer() {
+      clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        timeLeft--;
+        timerTextEl.textContent = `${timeLeft}s`;
+        
+        if (timeLeft <= 5) {
+          timerTextEl.classList.add("urgent");
+        }
+
+        if (timeLeft <= 0) {
+          gameOver();
+        }
+      }, 1000);
+    }
+
+    function flipCard(card) {
+      if (isLocked) return;
+      if (card.classList.contains("flipped") || card.classList.contains("matched")) return;
+
+      playFlipSound();
+      card.classList.add("flipped");
+      flippedCards.push(card);
+
+      if (flippedCards.length === 2) {
+        checkMatch();
+      }
+    }
+
+    function checkMatch() {
+      isLocked = true;
+      const [card1, card2] = flippedCards;
+      const match = card1.dataset.id === card2.dataset.id;
+
+      if (match) {
+        card1.classList.add("matched");
+        card2.classList.add("matched");
+        matchedCount++;
+        flippedCards = [];
+        isLocked = false;
+
+        if (matchedCount === targetPairs) {
+          levelComplete();
+        }
+      } else {
+        setTimeout(() => {
+          card1.classList.remove("flipped");
+          card2.classList.remove("flipped");
+          flippedCards = [];
+          isLocked = false;
+        }, 800);
+      }
+    }
+
+    function gameOver() {
+      clearInterval(timerInterval);
+      showModal(
+        "時間到！", 
+        "哈哈哈傻眼！時間不夠用了。<br>別灰心，再試一次吧！",
+        "重玩本關",
+        true
+      );
+    }
+
+    function levelComplete() {
+      clearInterval(timerInterval);
+      
+      const isLastLevel = currentLevelIdx === levelsData.length - 1;
+
+      if (isLastLevel) {
+        showModal(
+          "全破恭喜！🎉", 
+          "太強了！你已經完成了所有關卡。<br>你的記憶力簡直是電腦等級！",
+          "從頭再玩",
+          false
+        );
+        currentLevelIdx = -1; // 重置
+      } else {
+        const nextLevel = currentLevelIdx + 1;
+        const nextPairs = BASE_PAIRS + (nextLevel * PAIRS_INC);
+        const nextTime = BASE_TIME + (nextLevel * TIME_INC);
+        
+        showModal(
+          "關卡完成！", 
+          `下一關卡片變為 ${nextPairs * 2} 張<br>限時 ${nextTime} 秒，準備好了嗎？`,
+          "進入下一關",
+          false
+        );
+      }
+    }
+
+    function showModal(title, desc, btnText, isRetry) {
+      modalTitle.textContent = title;
+      modalDesc.innerHTML = desc;
+      btnAction.textContent = btnText;
+      
+      // 設定按鈕行為
+      btnAction.onclick = () => {
+        overlayEl.classList.remove("active");
+        if (isRetry) {
+          initGame(currentLevelIdx);
+        } else {
+          // 如果全部通關被重置為-1，這裡加1變回0
+          initGame(currentLevelIdx + 1);
+        }
+      };
+
+      // 顯示遮罩
+      overlayEl.classList.add("active");
+    }
+
+    // 初始綁定
+    btnAction.onclick = () => {
+      overlayEl.classList.remove("active");
+      initGame(0);
+    };
+
+  </script>
+</body>
+</html>
